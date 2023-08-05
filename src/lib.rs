@@ -251,7 +251,7 @@ mod test {
     #[test]
     fn highlight_one_char_at_start() {
         assert_eq!(
-            highlight_sections_from_stringdices("abc", &vec![0]),
+            highlight_sections_from_stringdices("abc", &[0]),
             vec![HighlightStyle::Matched("a"), HighlightStyle::None("bc")]
         );
     }
@@ -259,7 +259,7 @@ mod test {
     #[test]
     fn highlight_one_char_at_end() {
         assert_eq!(
-            highlight_sections_from_stringdices("abc", &vec![2]),
+            highlight_sections_from_stringdices("abc", &[2]),
             vec![HighlightStyle::None("ab"), HighlightStyle::Matched("c")]
         );
     }
@@ -267,7 +267,7 @@ mod test {
     #[test]
     fn highlight_three_char_at_start() {
         assert_eq!(
-            highlight_sections_from_stringdices("abcde", &vec![0, 1, 2]),
+            highlight_sections_from_stringdices("abcde", &[0, 1, 2]),
             vec![HighlightStyle::Matched("abc"), HighlightStyle::None("de")]
         );
     }
@@ -275,7 +275,7 @@ mod test {
     #[test]
     fn highlight_three_char_at_end() {
         assert_eq!(
-            highlight_sections_from_stringdices("abcde", &vec![2, 3, 4]),
+            highlight_sections_from_stringdices("abcde", &[2, 3, 4]),
             vec![HighlightStyle::None("ab"), HighlightStyle::Matched("cde")]
         );
     }
@@ -283,7 +283,7 @@ mod test {
     #[test]
     fn highlight_fun_mixture_one() {
         assert_eq!(
-            highlight_sections_from_stringdices("abcdefghijk", &vec![1, 2, 5, 6, 7, 9]),
+            highlight_sections_from_stringdices("abcdefghijk", &[1, 2, 5, 6, 7, 9]),
             vec![
                 HighlightStyle::None("a"),
                 HighlightStyle::Matched("bc"),
