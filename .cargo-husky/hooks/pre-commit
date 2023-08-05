@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -e
+
+FILES=$(git diff --cached --name-only --diff-filter=ACMR | sed 's| |\\ |g')
+echo '+cargo fmt'
+cargo fmt
+echo "$FILES" | xargs git add
+
+echo "+cargo readme > README.md"
+cargo readme > README.md
+git add README.md
