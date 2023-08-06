@@ -19,6 +19,22 @@ use tui::{
     widgets::{Block, List, ListItem, ListState, StatefulWidget},
 };
 
+/// Ephemeral list widget for fuzzy matched items.
+/// Highlights selected line and matched chars.
+/// Orders items by match score.
+///
+/// # Example
+///
+/// ```
+/// use tui::prelude::*;
+/// use tui::widgets::*;
+/// use tuiscope::FuzzyList;
+///
+/// let fuzzy_results = FuzzyList::<u32>::default()
+///     .block(Block::default().borders(Borders::ALL).title("Mathes"))
+///     .matched_char_style(Style::default().fg(Color::Cyan))
+///     .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
+/// ```
 #[derive(Default)]
 pub struct FuzzyList<'a, K> {
     block: Option<Block<'a>>,
@@ -29,16 +45,48 @@ pub struct FuzzyList<'a, K> {
 }
 
 impl<'a, K> FuzzyList<'a, K> {
+    /// Builder method to add a block specification to a `FuzzyList`
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tui::widgets::*;
+    /// use tuiscope::FuzzyList;
+    ///
+    /// let fuzzy: FuzzyList<u32> = FuzzyList::default().block( Block::default().borders(Borders::ALL).title("Matches"));
+    /// ```
     pub fn block(mut self, block: Block<'a>) -> Self {
         self.block = Some(block);
         self
     }
 
+    /// Builder method to set style for matched characters in fuzzy search
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tui::widgets::*;
+    /// use tuiscope::FuzzyList;
+    ///
+    /// let fuzzy: FuzzyList<u32> = FuzzyList::default().block( Block::default().borders(Borders::ALL).title("Matches"));
+    /// ```
     pub fn matched_char_style(mut self, style: Style) -> Self {
         self.matched_char_style = style;
         self
     }
 
+    /// Builder method to set style for selected item in filtered fuzzy list
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tui::prelude::*;
+    /// use tui::widgets::*;
+    /// use tuiscope::FuzzyList;
+    ///
+    /// let fuzzy_results = FuzzyList::<u32>::default()
+    ///     .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
+    /// ```
     pub fn selection_highlight_style(mut self, style: Style) -> Self {
         self.selection_highlight_style = style;
         self
@@ -58,15 +106,16 @@ impl<'a, K> FuzzyList<'a, K> {
     }
 }
 
+/// Return type for `FuzzyFinder<K>::selection`
 #[derive(Clone)]
 pub struct FuzzyListEntry<K> {
-    // key of entry
+    /// key of entry
     pub k: K,
-    // value of entry
+    /// value of entry
     pub v: String,
-    // fuzzy match score
+    /// fuzzy match score
     pub score: i64,
-    // fuzzy match indices (positions in `v`)
+    /// fuzzy match indices (positions in `v`)
     pub indices: Vec<usize>,
 }
 
@@ -90,11 +139,37 @@ impl<K> PartialEq for FuzzyListEntry<K> {
 
 impl<K> Eq for FuzzyListEntry<K> {}
 
+/// State for `FuzzyList<K>`.  Hold on to one of these and pass to `render_stateful_widget`
+///
+/// # Example
+///
+/// ```
+/// use tui::prelude::*;
+/// use tui::widgets::*;
+/// use tuiscope::{FuzzyFinder, FuzzyList};
+///
+/// fn ui<B: Backend>(f: &mut Frame<B>, state: &mut FuzzyFinder<u32>) {
+///     let chunks = Layout::default()
+///         .direction(Direction::Vertical)
+///         .constraints([Constraint::Min(1)].as_ref())
+///         .split(f.size());
+///
+///     let fuzzy_results = FuzzyList::<u32>::default()
+///         .block(Block::default().borders(Borders::ALL).title("Options"))
+///         .matched_char_style(Style::default().fg(Color::Cyan))
+///         .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
+///     f.render_stateful_widget(fuzzy_results, chunks[2], state);
+/// }
+/// ```
 #[derive(Default)]
 pub struct FuzzyFinder<K> {
+    /// The space of options to search.
     options: HashMap<K, String>,
+    /// The current filter string.
     filter: String,
+    /// The list of filtered entries, ordered by score.
     filtered_list: Vec<FuzzyListEntry<K>>,
+    /// State for the `FuzzyList` widget's selection.
     state: ListState,
 }
 
@@ -102,12 +177,14 @@ impl<K> FuzzyFinder<K>
 where
     K: Copy,
 {
+    /// Clears the filter term.
     pub fn clear_filter(&mut self) -> &mut Self {
         self.filter = String::new();
         self.update_filtered_list();
         self
     }
 
+    /// Resets the selected line from filtered options to the 0th.
     fn reset_selection(&mut self) -> &mut Self {
         if !self.filtered_list.is_empty() {
             self.state.select(Some(0));
@@ -117,6 +194,7 @@ where
         self
     }
 
+    /// Select the next filtered entry.
     pub fn select_next(&mut self) -> &mut Self {
         if let Some(current) = self.state.selected() {
             self.select(current + 1);
@@ -126,6 +204,7 @@ where
         self
     }
 
+    /// Select the previous filtered entry.
     pub fn select_prev(&mut self) -> &mut Self {
         if let Some(current) = self.state.selected() {
             if current > 0 {
@@ -146,18 +225,21 @@ where
         self
     }
 
+    /// Get the current selected entry.
     pub fn selection(&self) -> Option<FuzzyListEntry<K>> {
         self.state
             .selected()
             .and_then(|i| self.filtered_list.get(i).cloned())
     }
 
+    /// Updates the filter term.
     pub fn set_filter(&mut self, filter: String) -> &mut Self {
         self.filter = filter;
         self.update_filtered_list();
         self
     }
 
+    /// Sets the space of options to search.
     pub fn set_options(&mut self, options: HashMap<K, String>) -> &mut Self {
         self.options = options;
         self.update_filtered_list();
