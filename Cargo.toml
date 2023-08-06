@@ -26,6 +26,7 @@ time = { version = "0.3.11", optional = true, features = ["local-offset"] }
 tui = { package = "ratatui", version = "0.22.0", features = ["all-widgets"] }
 unicode-segmentation = "1.10"
 unicode-width = "0.1"
+thiserror = "1.0.44"
 
 [dev-dependencies]
 anyhow = "1.0.71"

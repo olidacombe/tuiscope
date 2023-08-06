@@ -2,10 +2,11 @@
 //!
 //! Inspired by [telescope](https://github.com/nvim-telescope/telescope.nvim).
 //!
-//! A TUI fuzzy finder for rust apps. For example usage, see [examples](https://github.com/olidacombe/tuiscope/tree/main/examples) for usage.
+//! A TUI fuzzy finder for rust apps. For example usage, see [examples](https://github.com/olidacombe/tuiscope/tree/main/examples).
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use itertools::Itertools;
 use std::{cmp::Ordering, collections::HashMap, marker::PhantomData};
+use thiserror::Error;
 use tui::{
     prelude::*,
     widgets::{Block, List, ListItem, ListState, StatefulWidget},
@@ -36,17 +37,17 @@ impl<'a, K> FuzzyList<'a, K> {
         self
     }
 
-    fn styled_line(&self, entry: &'a FuzzyListEntry<K>) -> Line {
+    fn styled_line(&self, entry: &'a FuzzyListEntry<K>) -> Result<Line, MatchHighlightError> {
         let raw = &entry.v;
-        Line::from(
-            highlight_sections_from_stringdices(raw, &entry.indices)
+        Ok(Line::from(
+            highlight_sections_from_stringdices(raw, &entry.indices)?
                 .iter()
                 .map(|section| match section {
                     HighlightStyle::None(sub) => Span::styled(*sub, self.unmatched_char_style),
                     HighlightStyle::Matched(sub) => Span::styled(*sub, self.matched_char_style),
                 })
                 .collect::<Vec<Span>>(),
-        )
+        ))
     }
 }
 
@@ -186,7 +187,8 @@ impl<'a, K> StatefulWidget for FuzzyList<'a, K> {
         let list: Vec<ListItem> = state
             .filtered_list
             .iter()
-            .map(|entry| ListItem::new(self.styled_line(entry)))
+            .filter_map(|entry| self.styled_line(entry).ok())
+            .map(|line| ListItem::new(line))
             .collect();
         let mut list = List::new(list)
             .highlight_style(self.selection_highlight_style)
@@ -204,16 +206,30 @@ enum HighlightStyle<'a> {
     Matched(&'a str),
 }
 
+#[derive(Error, Debug)]
+pub enum MatchHighlightError {
+    #[error("substring {range:?} not found in {string}")]
+    SubstringNotFound {
+        range: std::ops::RangeFrom<usize>,
+        string: String,
+    },
+}
+
 fn highlight_sections_from_stringdices<'a>(
     string: &'a str,
     indices: &'a [usize],
-) -> Vec<HighlightStyle<'a>> {
+) -> Result<Vec<HighlightStyle<'a>>, MatchHighlightError> {
     let mut ret = Vec::new();
     let mut indices = indices.iter().peekable();
     let mut i: usize = 0;
     while let Some(m) = indices.next() {
         if *m > 0 {
-            let sub = string.get(i..*m).unwrap();
+            let sub = string
+                .get(i..*m)
+                .ok_or_else(|| MatchHighlightError::SubstringNotFound {
+                    range: i..,
+                    string: string.into(),
+                })?;
             ret.push(HighlightStyle::None(sub));
         }
         i = *m;
@@ -225,65 +241,81 @@ fn highlight_sections_from_stringdices<'a>(
             indices.next();
             j += 1;
         }
-        let sub = string.get(i..j).unwrap();
+        let sub = string
+            .get(i..j)
+            .ok_or_else(|| MatchHighlightError::SubstringNotFound {
+                range: i..,
+                string: string.into(),
+            })?;
         ret.push(HighlightStyle::Matched(sub));
         i = j;
     }
     if i < string.len() {
-        let sub = string.get(i..).unwrap();
+        let sub = string
+            .get(i..)
+            .ok_or_else(|| MatchHighlightError::SubstringNotFound {
+                range: i..,
+                string: string.into(),
+            })?;
         ret.push(HighlightStyle::None(sub));
     }
-    ret
+    Ok(ret)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use anyhow::Result;
 
     #[test]
-    fn no_highlight() {
+    fn no_highlight() -> Result<()> {
         assert_eq!(
-            highlight_sections_from_stringdices("abc", &Vec::new()),
+            highlight_sections_from_stringdices("abc", &Vec::new())?,
             vec![HighlightStyle::None("abc")]
         );
+        Ok(())
     }
 
     #[test]
-    fn highlight_one_char_at_start() {
+    fn highlight_one_char_at_start() -> Result<()> {
         assert_eq!(
-            highlight_sections_from_stringdices("abc", &[0]),
+            highlight_sections_from_stringdices("abc", &[0])?,
             vec![HighlightStyle::Matched("a"), HighlightStyle::None("bc")]
         );
+        Ok(())
     }
 
     #[test]
-    fn highlight_one_char_at_end() {
+    fn highlight_one_char_at_end() -> Result<()> {
         assert_eq!(
-            highlight_sections_from_stringdices("abc", &[2]),
+            highlight_sections_from_stringdices("abc", &[2])?,
             vec![HighlightStyle::None("ab"), HighlightStyle::Matched("c")]
         );
+        Ok(())
     }
 
     #[test]
-    fn highlight_three_char_at_start() {
+    fn highlight_three_char_at_start() -> Result<()> {
         assert_eq!(
-            highlight_sections_from_stringdices("abcde", &[0, 1, 2]),
+            highlight_sections_from_stringdices("abcde", &[0, 1, 2])?,
             vec![HighlightStyle::Matched("abc"), HighlightStyle::None("de")]
         );
+        Ok(())
     }
 
     #[test]
-    fn highlight_three_char_at_end() {
+    fn highlight_three_char_at_end() -> Result<()> {
         assert_eq!(
-            highlight_sections_from_stringdices("abcde", &[2, 3, 4]),
+            highlight_sections_from_stringdices("abcde", &[2, 3, 4])?,
             vec![HighlightStyle::None("ab"), HighlightStyle::Matched("cde")]
         );
+        Ok(())
     }
 
     #[test]
-    fn highlight_fun_mixture_one() {
+    fn highlight_fun_mixture_one() -> Result<()> {
         assert_eq!(
-            highlight_sections_from_stringdices("abcdefghijk", &[1, 2, 5, 6, 7, 9]),
+            highlight_sections_from_stringdices("abcdefghijk", &[1, 2, 5, 6, 7, 9])?,
             vec![
                 HighlightStyle::None("a"),
                 HighlightStyle::Matched("bc"),
@@ -293,6 +325,7 @@ mod test {
                 HighlightStyle::Matched("j"),
                 HighlightStyle::None("k")
             ]
-        )
+        );
+        Ok(())
     }
 }
