@@ -106,6 +106,8 @@ impl App {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    tracing_subscriber::fmt::init();
+
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
