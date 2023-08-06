@@ -31,7 +31,7 @@ use tui::{
 /// use tuiscope::FuzzyList;
 ///
 /// let fuzzy_results = FuzzyList::<u32>::default()
-///     .block(Block::default().borders(Borders::ALL).title("Mathes"))
+///     .block(Block::default().borders(Borders::ALL).title("Matches"))
 ///     .matched_char_style(Style::default().fg(Color::Cyan))
 ///     .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
 /// ```
