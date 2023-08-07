@@ -106,7 +106,8 @@ impl App {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt::init();
+    // Error's to stderr make a mess of the interface, use this only for inspecting tracing output.
+    // tracing_subscriber::fmt::init();
 
     // setup terminal
     enable_raw_mode()?;
