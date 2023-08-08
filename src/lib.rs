@@ -254,7 +254,7 @@ where
     }
 
     fn update_filtered_list(&mut self) {
-        let matcher = SkimMatcherV2::default().element_limit(5).ignore_case();
+        let matcher = SkimMatcherV2::default();
         self.filtered_list = self
             .options
             .iter()
