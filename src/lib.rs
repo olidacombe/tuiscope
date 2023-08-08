@@ -108,36 +108,36 @@ impl<'a, K> FuzzyList<'a, K> {
 
 /// Return type for `FuzzyFinder<K>::selection`
 #[derive(Clone)]
-pub struct FuzzyListEntry<K> {
+pub struct FuzzyListEntry<'a, K> {
     /// key of entry
     pub k: K,
     /// value of entry
-    pub v: String,
+    pub v: &'a str,
     /// fuzzy match score
     pub score: i64,
     /// fuzzy match indices (positions in `v`)
     pub indices: Vec<usize>,
 }
 
-impl<K> Ord for FuzzyListEntry<K> {
+impl<'a, K> Ord for FuzzyListEntry<'a, K> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.score.cmp(&other.score)
     }
 }
 
-impl<K> PartialOrd for FuzzyListEntry<K> {
+impl<'a, K> PartialOrd for FuzzyListEntry<'a, K> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<K> PartialEq for FuzzyListEntry<K> {
+impl<'a, K> PartialEq for FuzzyListEntry<'a, K> {
     fn eq(&self, other: &Self) -> bool {
         self.score == other.score
     }
 }
 
-impl<K> Eq for FuzzyListEntry<K> {}
+impl<'a, K> Eq for FuzzyListEntry<'a, K> {}
 
 /// State for `FuzzyList<K>`.  Hold on to one of these and pass to `render_stateful_widget`
 ///
@@ -162,20 +162,20 @@ impl<K> Eq for FuzzyListEntry<K> {}
 /// }
 /// ```
 #[derive(Default)]
-pub struct FuzzyFinder<K> {
+pub struct FuzzyFinder<'a, K> {
     /// The space of options to search.
-    options: HashMap<K, String>,
+    options: HashMap<K, &'a str>,
     /// The current filter string.
     filter: String,
     /// The list of filtered entries, ordered by score.
-    filtered_list: Vec<FuzzyListEntry<K>>,
+    filtered_list: Vec<FuzzyListEntry<'a, K>>,
     /// State for the `FuzzyList` widget's selection.
     pub state: ListState,
 }
 
-impl<K> FuzzyFinder<K>
+impl<'a, K> FuzzyFinder<'a, K>
 where
-    K: Copy,
+    K: Copy + Eq + std::hash::Hash,
 {
     /// Clears the filter term.
     pub fn clear_filter(&mut self) -> &mut Self {
@@ -240,14 +240,14 @@ where
     }
 
     /// Sets the space of options to search.
-    pub fn set_options(&mut self, options: HashMap<K, String>) -> &mut Self {
-        self.options = options;
+    pub fn set_options(&mut self, options: &'a HashMap<K, String>) -> &mut Self {
+        self.options = HashMap::from_iter(options.iter().map(|(k, v)| (*k, v.as_str())));
         self.update_filtered_list();
         self
     }
 
     fn update_filtered_list(&mut self) {
-        let matcher = SkimMatcherV2::default();
+        let matcher = SkimMatcherV2::default().element_limit(5).ignore_case();
         self.filtered_list = self
             .options
             .iter()
@@ -256,7 +256,7 @@ where
                     .fuzzy_indices(v, &self.filter)
                     .map(|(score, indices)| FuzzyListEntry::<K> {
                         k: *k,
-                        v: v.to_string(),
+                        v,
                         score,
                         indices,
                     })
@@ -270,7 +270,7 @@ where
 }
 
 impl<'a, K> StatefulWidget for FuzzyList<'a, K> {
-    type State = FuzzyFinder<K>;
+    type State = FuzzyFinder<'a, K>;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let list: Vec<ListItem> = state

@@ -14,11 +14,11 @@ enum InputMode {
 }
 
 /// App holds the state of the application
-struct App {
+struct App<'a> {
     /// Current value of the input box
     input: String,
     /// Fuzzy Finder
-    fuzzy_finder: FuzzyFinder<u32>,
+    pub fuzzy_finder: FuzzyFinder<'a, u32>,
     /// Position of cursor in the editor area.
     cursor_position: usize,
     /// Current input mode
@@ -27,15 +27,10 @@ struct App {
     messages: Vec<String>,
 }
 
-impl Default for App {
-    fn default() -> App {
-        let mut fuzzy_finder = FuzzyFinder::default();
-        let mut options = HashMap::new();
-        for n in 1..40 {
-            options.insert(n, beer::name());
-        }
-        fuzzy_finder.set_options(options);
-        App {
+impl<'a> Default for App<'a> {
+    fn default() -> Self {
+        let fuzzy_finder = FuzzyFinder::default();
+        Self {
             fuzzy_finder,
             input: String::new(),
             input_mode: InputMode::Normal,
@@ -45,7 +40,7 @@ impl Default for App {
     }
 }
 
-impl App {
+impl<'a> App<'a> {
     fn move_cursor_left(&mut self) {
         let cursor_moved_left = self.cursor_position.saturating_sub(1);
         self.cursor_position = self.clamp_cursor(cursor_moved_left);
@@ -97,7 +92,7 @@ impl App {
 
     fn submit_message(&mut self) {
         if let Some(selection) = self.fuzzy_finder.selection() {
-            self.messages.push(selection.v);
+            self.messages.push(selection.v.to_string());
         }
         self.input.clear();
         self.fuzzy_finder.clear_filter();
@@ -109,6 +104,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Error's to stderr make a mess of the interface, use this only for inspecting tracing output.
     // tracing_subscriber::fmt::init();
 
+    let mut options = HashMap::<u32, String>::new();
+    for n in 1..40 {
+        options.insert(n, beer::name());
+    }
+
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -117,7 +117,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let app = App::default();
+    let mut app = App::default();
+    app.fuzzy_finder.set_options(&options);
     let res = run_app(&mut terminal, app);
 
     // restore terminal
