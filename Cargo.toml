@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/olidacombe/tuiscope"
 readme = "README.md"
 rust-version = "1.65.0"
-version = "0.1.1"
+version = "0.2.0"
 
 [dependencies]
 crossterm = { version = "0.26" }
