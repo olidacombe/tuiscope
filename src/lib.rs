@@ -161,10 +161,9 @@ impl<'a, K> Eq for FuzzyListEntry<'a, K> {}
 ///     f.render_stateful_widget(fuzzy_results, chunks[2], state);
 /// }
 /// ```
-#[derive(Default)]
 pub struct FuzzyFinder<'a, K> {
     /// The space of options to search.
-    options: HashMap<K, &'a str>,
+    options: &'a HashMap<K, String>,
     /// The current filter string.
     filter: String,
     /// The list of filtered entries, ordered by score.
@@ -177,6 +176,14 @@ impl<'a, K> FuzzyFinder<'a, K>
 where
     K: Copy + Eq + std::hash::Hash,
 {
+    pub fn new(options: &'a HashMap<K, String>) -> Self {
+        Self {
+            options,
+            filter: String::default(),
+            filtered_list: Vec::new(),
+            state: ListState::default(),
+        }
+    }
     /// Clears the filter term.
     pub fn clear_filter(&mut self) -> &mut Self {
         self.filter = String::new();
@@ -241,7 +248,7 @@ where
 
     /// Sets the space of options to search.
     pub fn set_options(&mut self, options: &'a HashMap<K, String>) -> &mut Self {
-        self.options = HashMap::from_iter(options.iter().map(|(k, v)| (*k, v.as_str())));
+        self.options = options;
         self.update_filtered_list();
         self
     }
@@ -269,7 +276,7 @@ where
     }
 }
 
-impl<'a, K> StatefulWidget for FuzzyList<'a, K> {
+impl<'a, K: 'a> StatefulWidget for FuzzyList<'a, K> {
     type State = FuzzyFinder<'a, K>;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {

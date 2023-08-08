@@ -27,9 +27,9 @@ struct App<'a> {
     messages: Vec<String>,
 }
 
-impl<'a> Default for App<'a> {
-    fn default() -> Self {
-        let fuzzy_finder = FuzzyFinder::default();
+impl<'a> App<'a> {
+    fn new(options: &'a HashMap<u32, String>) -> Self {
+        let fuzzy_finder = FuzzyFinder::new(options);
         Self {
             fuzzy_finder,
             input: String::new(),
@@ -38,9 +38,6 @@ impl<'a> Default for App<'a> {
             cursor_position: 0,
         }
     }
-}
-
-impl<'a> App<'a> {
     fn move_cursor_left(&mut self) {
         let cursor_moved_left = self.cursor_position.saturating_sub(1);
         self.cursor_position = self.clamp_cursor(cursor_moved_left);
@@ -117,8 +114,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let mut app = App::default();
-    app.fuzzy_finder.set_options(&options);
+    let app = App::new(&options);
     let res = run_app(&mut terminal, app);
 
     // restore terminal
