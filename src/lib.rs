@@ -170,7 +170,7 @@ pub struct FuzzyFinder<K> {
     /// The list of filtered entries, ordered by score.
     filtered_list: Vec<FuzzyListEntry<K>>,
     /// State for the `FuzzyList` widget's selection.
-    state: ListState,
+    pub state: ListState,
 }
 
 impl<K> FuzzyFinder<K>
@@ -277,6 +277,7 @@ impl<'a, K> StatefulWidget for FuzzyList<'a, K> {
             .filtered_list
             .iter()
             .filter_map(|entry| self.styled_line(entry).ok())
+            .take(area.height as usize + state.state.selected().unwrap_or(0))
             .map(ListItem::new)
             .collect();
         let mut list = List::new(list)
