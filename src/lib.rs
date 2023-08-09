@@ -268,16 +268,19 @@ where
                         indices,
                     })
             })
-            .fold_with(BinaryHeap::new(), |mut heap, entry| {
-                heap.push(entry);
-                // heap.shrink_to(50);
-                heap
-            })
-            .reduce(BinaryHeap::new, |mut x, mut y| {
-                x.append(&mut y);
-                x
-            })
-            .into_vec();
+            // I think this might be an improvement with same fixed-size heap implementation...
+            // .fold_with(BinaryHeap::new(), |mut heap, entry| {
+            //     heap.push(entry);
+            //     // heap.shrink_to(50);
+            //     heap
+            // })
+            // .reduce(BinaryHeap::new, |mut x, mut y| {
+            //     x.append(&mut y);
+            //     x
+            // })
+            // .into_sorted_vec();
+            .collect();
+        self.filtered_list.par_sort_unstable_by_key(|e| e.score);
         // TODO only if some change
         self.reset_selection();
     }
