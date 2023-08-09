@@ -3,8 +3,13 @@
 //! Inspired by [telescope](https://github.com/nvim-telescope/telescope.nvim).
 //!
 //! A TUI fuzzy finder for rust apps. For example usage, see [examples](https://github.com/olidacombe/tuiscope/tree/main/examples).
+//!
+//! # Performance
+//!
+//! If you're dealing with large amounts of data (say 1,000,000 strings), performance is poor with
+//! debug builds.  Release builds are still snappy.
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use itertools::Itertools;
+use rayon::prelude::*;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -121,7 +126,8 @@ pub struct FuzzyListEntry<'a, K> {
 
 impl<'a, K> Ord for FuzzyListEntry<'a, K> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.score.cmp(&other.score)
+        // reverse so ascending order is highest score first!!!
+        other.score.cmp(&self.score)
     }
 }
 
@@ -174,7 +180,7 @@ pub struct FuzzyFinder<'a, K> {
 
 impl<'a, K> FuzzyFinder<'a, K>
 where
-    K: Copy + Eq + std::hash::Hash,
+    K: Copy + Eq + std::hash::Hash + Send + Eq + Sync,
 {
     pub fn new(options: &'a HashMap<K, String>) -> Self {
         Self {
@@ -257,7 +263,7 @@ where
         let matcher = SkimMatcherV2::default();
         self.filtered_list = self
             .options
-            .iter()
+            .par_iter()
             .filter_map(|(k, v)| {
                 matcher
                     .fuzzy_indices(v, &self.filter)
@@ -268,9 +274,28 @@ where
                         indices,
                     })
             })
-            .sorted()
-            .rev()
+            // I thought this might be an improvement.. apparently not
+            // .fold_with(BinaryHeap::with_capacity(500), |mut heap, entry| {
+            //     if heap.len() >= 500 {
+            //         if heap
+            //             .peek()
+            //             .map_or(false, |current_worst| *current_worst > entry)
+            //         {
+            //             heap.pop();
+            //             heap.push(entry);
+            //         }
+            //     } else {
+            //         heap.push(entry);
+            //     }
+            //     heap
+            // })
+            // .reduce(BinaryHeap::new, |mut x, mut y| {
+            //     x.append(&mut y);
+            //     x
+            // })
+            // .into_sorted_vec();
             .collect();
+        self.filtered_list.par_sort_unstable();
         // TODO only if some change
         self.reset_selection();
     }

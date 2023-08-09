@@ -10,10 +10,10 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/olidacombe/tuiscope"
 readme = "README.md"
 rust-version = "1.65.0"
-version = "0.2.0"
+version = "0.2.1"
 
 [dependencies]
-crossterm = { version = "0.26" }
+crossterm = { version = "0.27.0" }
 bitflags = "2.3"
 cassowary = "0.3"
 fuzzy-matcher = "0.3.7"
@@ -28,6 +28,7 @@ unicode-segmentation = "1.10"
 unicode-width = "0.1"
 thiserror = "1.0.44"
 tracing = "0.1.37"
+rayon = "1.7.0"
 
 [dev-dependencies]
 anyhow = "1.0.71"
@@ -41,3 +42,7 @@ tracing-subscriber = "0.3.17"
 version = "1"
 default-features = false
 features = ["user-hooks"]
+
+[[bench]]
+name = "update_filtered_list"
+harness = false
