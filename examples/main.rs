@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // tracing_subscriber::fmt::init();
 
     let mut options = HashMap::<u32, String>::new();
-    for n in 1..1_000_000 {
+    for n in 1..100 {
         options.insert(n, beer::name());
     }
 
