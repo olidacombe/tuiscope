@@ -4,11 +4,10 @@
 //!
 //! A TUI fuzzy finder for rust apps. For example usage, see [examples](https://github.com/olidacombe/tuiscope/tree/main/examples).
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use itertools::Itertools;
 use rayon::prelude::*;
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{BinaryHeap, HashMap},
     marker::PhantomData,
     ops::{Bound, RangeBounds},
     slice::SliceIndex,
@@ -269,8 +268,16 @@ where
                         indices,
                     })
             })
-            .collect();
-        self.filtered_list.par_sort_unstable_by_key(|e| -e.score);
+            .fold_with(BinaryHeap::new(), |mut heap, entry| {
+                heap.push(entry);
+                // heap.shrink_to(50);
+                heap
+            })
+            .reduce(BinaryHeap::new, |mut x, mut y| {
+                x.append(&mut y);
+                x
+            })
+            .into_vec();
         // TODO only if some change
         self.reset_selection();
     }
@@ -283,6 +290,7 @@ impl<'a, K: 'a> StatefulWidget for FuzzyList<'a, K> {
         let list: Vec<ListItem> = state
             .filtered_list
             .iter()
+            .rev()
             .filter_map(|entry| self.styled_line(entry).ok())
             .take(area.height as usize + state.state.selected().unwrap_or(0))
             .map(ListItem::new)
