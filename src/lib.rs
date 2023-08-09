@@ -5,6 +5,7 @@
 //! A TUI fuzzy finder for rust apps. For example usage, see [examples](https://github.com/olidacombe/tuiscope/tree/main/examples).
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use itertools::Itertools;
+use rayon::prelude::*;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -174,7 +175,7 @@ pub struct FuzzyFinder<'a, K> {
 
 impl<'a, K> FuzzyFinder<'a, K>
 where
-    K: Copy + Eq + std::hash::Hash,
+    K: Copy + Eq + std::hash::Hash + Send + Eq + Sync,
 {
     pub fn new(options: &'a HashMap<K, String>) -> Self {
         Self {
@@ -257,7 +258,7 @@ where
         let matcher = SkimMatcherV2::default();
         self.filtered_list = self
             .options
-            .iter()
+            .par_iter()
             .filter_map(|(k, v)| {
                 matcher
                     .fuzzy_indices(v, &self.filter)
@@ -268,9 +269,8 @@ where
                         indices,
                     })
             })
-            .sorted()
-            .rev()
             .collect();
+        self.filtered_list.par_sort_unstable_by_key(|e| -e.score);
         // TODO only if some change
         self.reset_selection();
     }

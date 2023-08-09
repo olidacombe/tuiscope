@@ -28,6 +28,7 @@ unicode-segmentation = "1.10"
 unicode-width = "0.1"
 thiserror = "1.0.44"
 tracing = "0.1.37"
+rayon = "1.7.0"
 
 [dev-dependencies]
 anyhow = "1.0.71"
