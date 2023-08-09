@@ -7,7 +7,7 @@ use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use rayon::prelude::*;
 use std::{
     cmp::Ordering,
-    collections::{BinaryHeap, HashMap},
+    collections::HashMap,
     marker::PhantomData,
     ops::{Bound, RangeBounds},
     slice::SliceIndex,
@@ -121,7 +121,8 @@ pub struct FuzzyListEntry<'a, K> {
 
 impl<'a, K> Ord for FuzzyListEntry<'a, K> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.score.cmp(&other.score)
+        // reverse so ascending order is highest score first!!!
+        other.score.cmp(&self.score)
     }
 }
 
@@ -268,10 +269,19 @@ where
                         indices,
                     })
             })
-            // I think this might be an improvement with same fixed-size heap implementation...
-            // .fold_with(BinaryHeap::new(), |mut heap, entry| {
-            //     heap.push(entry);
-            //     // heap.shrink_to(50);
+            // I thought this might be an improvement.. apparently not
+            // .fold_with(BinaryHeap::with_capacity(500), |mut heap, entry| {
+            //     if heap.len() >= 500 {
+            //         if heap
+            //             .peek()
+            //             .map_or(false, |current_worst| *current_worst > entry)
+            //         {
+            //             heap.pop();
+            //             heap.push(entry);
+            //         }
+            //     } else {
+            //         heap.push(entry);
+            //     }
             //     heap
             // })
             // .reduce(BinaryHeap::new, |mut x, mut y| {
@@ -280,7 +290,7 @@ where
             // })
             // .into_sorted_vec();
             .collect();
-        self.filtered_list.par_sort_unstable_by_key(|e| e.score);
+        self.filtered_list.par_sort_unstable();
         // TODO only if some change
         self.reset_selection();
     }
@@ -293,7 +303,6 @@ impl<'a, K: 'a> StatefulWidget for FuzzyList<'a, K> {
         let list: Vec<ListItem> = state
             .filtered_list
             .iter()
-            .rev()
             .filter_map(|entry| self.styled_line(entry).ok())
             .take(area.height as usize + state.state.selected().unwrap_or(0))
             .map(ListItem::new)
