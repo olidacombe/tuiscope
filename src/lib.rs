@@ -9,6 +9,7 @@
 //! If you're dealing with large amounts of data (say 1,000,000 strings), performance is poor with
 //! debug builds.  Release builds are still snappy.
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use indexmap::IndexMap;
 use rayon::prelude::*;
 use std::{
     cmp::Ordering,
@@ -41,15 +42,14 @@ use tui::{
 ///     .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
 /// ```
 #[derive(Default)]
-pub struct FuzzyList<'a, K> {
+pub struct FuzzyList<'a> {
     block: Option<Block<'a>>,
     matched_char_style: Style,
     selection_highlight_style: Style,
     unmatched_char_style: Style,
-    _key_type: PhantomData<K>,
 }
 
-impl<'a, K> FuzzyList<'a, K> {
+impl<'a> FuzzyList<'a> {
     /// Builder method to add a block specification to a `FuzzyList`
     ///
     /// # Example
@@ -97,10 +97,13 @@ impl<'a, K> FuzzyList<'a, K> {
         self
     }
 
-    fn styled_line(&self, entry: &'a FuzzyListEntry<K>) -> Result<Line, MatchHighlightError> {
-        let raw = &entry.v;
+    fn styled_line(
+        &self,
+        value: &'a str,
+        indices: &'a [usize],
+    ) -> Result<Line, MatchHighlightError> {
         Ok(Line::from(
-            highlight_sections_from_stringdices(raw, &entry.indices)?
+            highlight_sections_from_stringdices(value, indices)?
                 .iter()
                 .map(|section| match section {
                     HighlightStyle::None(sub) => Span::styled(*sub, self.unmatched_char_style),
@@ -111,39 +114,45 @@ impl<'a, K> FuzzyList<'a, K> {
     }
 }
 
-/// Return type for `FuzzyFinder<K>::selection`
-#[derive(Clone)]
-pub struct FuzzyListEntry<'a, K> {
-    /// key of entry
-    pub k: K,
-    /// value of entry
-    pub v: &'a str,
+/// Type for holding fuzzy match score with corresponding indices
+struct FuzzyScore {
     /// fuzzy match score
     pub score: i64,
-    /// fuzzy match indices (positions in `v`)
+    /// fuzzy match indices (positions in the matched string)
     pub indices: Vec<usize>,
 }
 
-impl<'a, K> Ord for FuzzyListEntry<'a, K> {
+/// Return type for `FuzzyFinder::selection`
+#[derive(Clone)]
+pub struct FuzzyListEntry<'a> {
+    /// value of entry
+    pub value: &'a str,
+    /// fuzzy match score
+    pub score: i64,
+    /// fuzzy match indices (positions in `value`)
+    pub indices: Vec<usize>,
+}
+
+impl<'a> Ord for FuzzyListEntry<'a> {
     fn cmp(&self, other: &Self) -> Ordering {
         // reverse so ascending order is highest score first!!!
         other.score.cmp(&self.score)
     }
 }
 
-impl<'a, K> PartialOrd for FuzzyListEntry<'a, K> {
+impl<'a> PartialOrd for FuzzyListEntry<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a, K> PartialEq for FuzzyListEntry<'a, K> {
+impl<'a> PartialEq for FuzzyListEntry<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.score == other.score
     }
 }
 
-impl<'a, K> Eq for FuzzyListEntry<'a, K> {}
+impl<'a> Eq for FuzzyListEntry<'a> {}
 
 /// State for `FuzzyList<K>`.  Hold on to one of these and pass to `render_stateful_widget`
 ///
@@ -167,26 +176,20 @@ impl<'a, K> Eq for FuzzyListEntry<'a, K> {}
 ///     f.render_stateful_widget(fuzzy_results, chunks[2], state);
 /// }
 /// ```
-pub struct FuzzyFinder<'a, K> {
-    /// The space of options to search.
-    options: &'a HashMap<K, String>,
+pub struct FuzzyFinder<'a> {
     /// The current filter string.
     filter: String,
-    /// The list of filtered entries, ordered by score.
-    filtered_list: Vec<FuzzyListEntry<'a, K>>,
+    /// IndexMap of FuzzyScore
+    matches: IndexMap<&'a str, Option<FuzzyScore>>,
     /// State for the `FuzzyList` widget's selection.
     pub state: ListState,
 }
 
-impl<'a, K> FuzzyFinder<'a, K>
-where
-    K: Copy + Eq + std::hash::Hash + Send + Eq + Sync,
-{
-    pub fn new(options: &'a HashMap<K, String>) -> Self {
+impl<'a> FuzzyFinder<'a> {
+    pub fn new() -> Self {
         Self {
-            options,
             filter: String::default(),
-            filtered_list: Vec::new(),
+            matches: IndexMap::default(),
             state: ListState::default(),
         }
     }
@@ -199,7 +202,7 @@ where
 
     /// Resets the selected line from filtered options to the 0th.
     fn reset_selection(&mut self) -> &mut Self {
-        if !self.filtered_list.is_empty() {
+        if !self.matches.is_empty() {
             self.state.select(Some(0));
         } else {
             self.state.select(None);
@@ -230,7 +233,7 @@ where
     }
 
     fn select(&mut self, index: usize) -> &mut Self {
-        let len = self.filtered_list.len();
+        let len = self.matches.len();
         if len < 1 {
             return self.reset_selection();
         }
@@ -239,10 +242,21 @@ where
     }
 
     /// Get the current selected entry.
-    pub fn selection(&self) -> Option<FuzzyListEntry<K>> {
-        self.state
-            .selected()
-            .and_then(|i| self.filtered_list.get(i).cloned())
+    pub fn selection(&self) -> Option<FuzzyListEntry> {
+        self.state.selected().and_then(|i| {
+            self.matches
+                .get_index(i)
+                .map(|(value, score)| {
+                    score
+                        .as_ref()
+                        .map(|FuzzyScore { score, indices }| FuzzyListEntry {
+                            value,
+                            indices: indices.clone(),
+                            score: *score,
+                        })
+                })
+                .flatten()
+        })
     }
 
     /// Updates the filter term.
@@ -253,62 +267,66 @@ where
     }
 
     /// Sets the space of options to search.
-    pub fn set_options(&mut self, options: &'a HashMap<K, String>) -> &mut Self {
-        self.options = options;
-        self.update_filtered_list();
-        self
-    }
+    // pub fn set_options(&mut self, options: &'a HashMap<String>) -> &mut Self {
+    //     self.options = options;
+    //     self.update_filtered_list();
+    //     self
+    // }
 
     fn update_filtered_list(&mut self) {
         let matcher = SkimMatcherV2::default();
-        self.filtered_list = self
-            .options
-            .par_iter()
-            .filter_map(|(k, v)| {
-                matcher
-                    .fuzzy_indices(v, &self.filter)
-                    .map(|(score, indices)| FuzzyListEntry::<K> {
-                        k: *k,
-                        v,
-                        score,
-                        indices,
-                    })
-            })
-            // I thought this might be an improvement.. apparently not
-            // .fold_with(BinaryHeap::with_capacity(500), |mut heap, entry| {
-            //     if heap.len() >= 500 {
-            //         if heap
-            //             .peek()
-            //             .map_or(false, |current_worst| *current_worst > entry)
-            //         {
-            //             heap.pop();
-            //             heap.push(entry);
-            //         }
-            //     } else {
-            //         heap.push(entry);
-            //     }
-            //     heap
-            // })
-            // .reduce(BinaryHeap::new, |mut x, mut y| {
-            //     x.append(&mut y);
-            //     x
-            // })
-            // .into_sorted_vec();
-            .collect();
-        self.filtered_list.par_sort_unstable();
+        // self.filtered_list = self
+        //     .filtered_list
+        //     .into_par_iter()
+        //     .filter_map(|v| {
+        //         matcher
+        //             .fuzzy_indices(v, &self.filter)
+        //             .map(|(score, indices)| FuzzyListEntry {
+        //                 value: v,
+        //                 score,
+        //                 indices,
+        //             })
+        //     })
+        // I thought this might be an improvement.. apparently not
+        // .fold_with(BinaryHeap::with_capacity(500), |mut heap, entry| {
+        //     if heap.len() >= 500 {
+        //         if heap
+        //             .peek()
+        //             .map_or(false, |current_worst| *current_worst > entry)
+        //         {
+        //             heap.pop();
+        //             heap.push(entry);
+        //         }
+        //     } else {
+        //         heap.push(entry);
+        //     }
+        //     heap
+        // })
+        // .reduce(BinaryHeap::new, |mut x, mut y| {
+        //     x.append(&mut y);
+        //     x
+        // })
+        // .into_sorted_vec();
+        // .collect();
+        // self.filtered_list.par_sort_unstable();
         // TODO only if some change
         self.reset_selection();
     }
 }
 
-impl<'a, K: 'a> StatefulWidget for FuzzyList<'a, K> {
-    type State = FuzzyFinder<'a, K>;
+impl<'a> StatefulWidget for FuzzyList<'a> {
+    type State = FuzzyFinder<'a>;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let list: Vec<ListItem> = state
-            .filtered_list
+            .matches
             .iter()
-            .filter_map(|entry| self.styled_line(entry).ok())
+            .filter_map(|(value, score)| {
+                score
+                    .as_ref()
+                    .map(|score| self.styled_line(value, &score.indices).ok())
+                    .flatten()
+            })
             .take(area.height as usize + state.state.selected().unwrap_or(0))
             .map(ListItem::new)
             .collect();
