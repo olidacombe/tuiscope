@@ -13,8 +13,6 @@ use indexmap::IndexMap;
 use rayon::prelude::*;
 use std::{
     cmp::Ordering,
-    collections::HashMap,
-    marker::PhantomData,
     ops::{Bound, RangeBounds},
     slice::SliceIndex,
 };
@@ -122,6 +120,27 @@ struct FuzzyScore {
     pub indices: Vec<usize>,
 }
 
+impl Ord for FuzzyScore {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // reverse so ascending order is highest score first!!!
+        other.score.cmp(&self.score)
+    }
+}
+
+impl PartialOrd for FuzzyScore {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for FuzzyScore {
+    fn eq(&self, other: &Self) -> bool {
+        self.score == other.score
+    }
+}
+
+impl Eq for FuzzyScore {}
+
 /// Return type for `FuzzyFinder::selection`
 #[derive(Clone)]
 pub struct FuzzyListEntry<'a> {
@@ -132,27 +151,6 @@ pub struct FuzzyListEntry<'a> {
     /// fuzzy match indices (positions in `value`)
     pub indices: Vec<usize>,
 }
-
-impl<'a> Ord for FuzzyListEntry<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // reverse so ascending order is highest score first!!!
-        other.score.cmp(&self.score)
-    }
-}
-
-impl<'a> PartialOrd for FuzzyListEntry<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<'a> PartialEq for FuzzyListEntry<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.score == other.score
-    }
-}
-
-impl<'a> Eq for FuzzyListEntry<'a> {}
 
 /// State for `FuzzyList<K>`.  Hold on to one of these and pass to `render_stateful_widget`
 ///
@@ -179,7 +177,7 @@ impl<'a> Eq for FuzzyListEntry<'a> {}
 pub struct FuzzyFinder<'a> {
     /// The current filter string.
     filter: String,
-    /// IndexMap of FuzzyScore
+    /// IndexMap of FuzzyScore.
     matches: IndexMap<&'a str, Option<FuzzyScore>>,
     /// State for the `FuzzyList` widget's selection.
     pub state: ListState,
@@ -196,7 +194,7 @@ impl<'a> FuzzyFinder<'a> {
     /// Clears the filter term.
     pub fn clear_filter(&mut self) -> &mut Self {
         self.filter = String::new();
-        self.update_filtered_list();
+        self.update_matches(true);
         self
     }
 
@@ -262,53 +260,68 @@ impl<'a> FuzzyFinder<'a> {
     /// Updates the filter term.
     pub fn set_filter(&mut self, filter: String) -> &mut Self {
         self.filter = filter;
-        self.update_filtered_list();
+        self.update_matches(true);
         self
     }
 
-    /// Sets the space of options to search.
-    // pub fn set_options(&mut self, options: &'a HashMap<String>) -> &mut Self {
-    //     self.options = options;
-    //     self.update_filtered_list();
-    //     self
+    /// Updates the set of options to search.
+    pub fn add_options<T: IntoIterator<Item = R>, R: 'a + AsRef<str>>(
+        &mut self,
+        options: T,
+    ) -> &mut Self {
+        for option in options {
+            // keep existing score if entry exists.
+            self.matches.entry(option.as_ref()).or_insert(None);
+        }
+        self.update_matches(false);
+        self
+    }
+
+    // fn compute_matches<I: ParallelIterator<Item = (&str, &'a mut Option<FuzzyScore>)>>(
+    //     &mut self,
+    //     iterator: I,
+    // ) {
+    //     let matcher = SkimMatcherV2::default();
+    //
+    //     iterator.for_each(|(value, score)| {
+    //         *score = matcher
+    //             .fuzzy_indices(value, &self.filter)
+    //             .map(|(score, indices)| FuzzyScore { score, indices })
+    //     });
     // }
 
-    fn update_filtered_list(&mut self) {
+    fn update_matches(&mut self, new_filter_term: bool) {
         let matcher = SkimMatcherV2::default();
-        // self.filtered_list = self
-        //     .filtered_list
-        //     .into_par_iter()
-        //     .filter_map(|v| {
-        //         matcher
-        //             .fuzzy_indices(v, &self.filter)
-        //             .map(|(score, indices)| FuzzyListEntry {
-        //                 value: v,
-        //                 score,
-        //                 indices,
-        //             })
-        //     })
-        // I thought this might be an improvement.. apparently not
-        // .fold_with(BinaryHeap::with_capacity(500), |mut heap, entry| {
-        //     if heap.len() >= 500 {
-        //         if heap
-        //             .peek()
-        //             .map_or(false, |current_worst| *current_worst > entry)
-        //         {
-        //             heap.pop();
-        //             heap.push(entry);
-        //         }
-        //     } else {
-        //         heap.push(entry);
-        //     }
-        //     heap
-        // })
-        // .reduce(BinaryHeap::new, |mut x, mut y| {
-        //     x.append(&mut y);
-        //     x
-        // })
-        // .into_sorted_vec();
-        // .collect();
-        // self.filtered_list.par_sort_unstable();
+
+        let iter = self.matches.par_iter_mut();
+        if !new_filter_term {
+            // TODO None matches were inserted last, so we should be able to iterate
+            // from the end and stop early.  But I couldn't quite find the right
+            // early-stopping option for an IndexedParallesIterator
+            // iter = iter.rev().take_any_while... race behavior is not ideal
+
+            // TODO just filter here, drop the else {} and run self.compute_matches outside
+            // condition
+            iter.filter(|(_, score)| score.is_none())
+                .for_each(|(value, score)| {
+                    *score = matcher
+                        .fuzzy_indices(value, &self.filter)
+                        .map(|(score, indices)| FuzzyScore { score, indices })
+                });
+
+            // self.compute_matches(iter.filter(|(_, score)| score.is_none()));
+        } else {
+            iter.for_each(|(value, score)| {
+                *score = matcher
+                    .fuzzy_indices(value, &self.filter)
+                    .map(|(score, indices)| FuzzyScore { score, indices })
+            });
+        }
+        // self.compute_matches(iter.filter(|(_, score)| score.is_none()));
+
+        self.matches
+            .par_sorted_unstable_by(|_, ref v1, _, ref v2| v1.cmp(v2));
+
         // TODO only if some change
         self.reset_selection();
     }
