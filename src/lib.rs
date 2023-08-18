@@ -314,7 +314,13 @@ impl<'a> FuzzyFinder<'a> {
         // self.compute_matches(iter.filter(|(_, score)| score.is_none()));
 
         self.matches
-            .par_sort_unstable_by(|_, ref v1, _, ref v2| v1.cmp(v2));
+            .par_sort_unstable_by(|_, ref v1, _, ref v2| match v1 {
+                Some(v1) => match v2 {
+                    Some(v2) => v1.cmp(v2),
+                    None => Ordering::Less,
+                },
+                None => Ordering::Greater,
+            });
 
         // TODO only if some change
         self.reset_selection();
