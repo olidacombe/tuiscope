@@ -34,7 +34,7 @@ use tui::{
 /// use tui::widgets::*;
 /// use tuiscope::FuzzyList;
 ///
-/// let fuzzy_results = FuzzyList::<u32>::default()
+/// let fuzzy_results = FuzzyList::default()
 ///     .block(Block::default().borders(Borders::ALL).title("Matches"))
 ///     .matched_char_style(Style::default().fg(Color::Cyan))
 ///     .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
@@ -56,7 +56,7 @@ impl<'a> FuzzyList<'a> {
     /// use tui::widgets::*;
     /// use tuiscope::FuzzyList;
     ///
-    /// let fuzzy: FuzzyList<u32> = FuzzyList::default().block( Block::default().borders(Borders::ALL).title("Matches"));
+    /// let fuzzy = FuzzyList::default().block( Block::default().borders(Borders::ALL).title("Matches"));
     /// ```
     pub fn block(mut self, block: Block<'a>) -> Self {
         self.block = Some(block);
@@ -71,7 +71,7 @@ impl<'a> FuzzyList<'a> {
     /// use tui::widgets::*;
     /// use tuiscope::FuzzyList;
     ///
-    /// let fuzzy: FuzzyList<u32> = FuzzyList::default().block( Block::default().borders(Borders::ALL).title("Matches"));
+    /// let fuzzy = FuzzyList::default().block( Block::default().borders(Borders::ALL).title("Matches"));
     /// ```
     pub fn matched_char_style(mut self, style: Style) -> Self {
         self.matched_char_style = style;
@@ -87,7 +87,7 @@ impl<'a> FuzzyList<'a> {
     /// use tui::widgets::*;
     /// use tuiscope::FuzzyList;
     ///
-    /// let fuzzy_results = FuzzyList::<u32>::default()
+    /// let fuzzy_results = FuzzyList::default()
     ///     .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
     /// ```
     pub fn selection_highlight_style(mut self, style: Style) -> Self {
@@ -161,13 +161,13 @@ pub struct FuzzyListEntry<'a> {
 /// use tui::widgets::*;
 /// use tuiscope::{FuzzyFinder, FuzzyList};
 ///
-/// fn ui<B: Backend>(f: &mut Frame<B>, state: &mut FuzzyFinder<u32>) {
+/// fn ui<B: Backend>(f: &mut Frame<B>, state: &mut FuzzyFinder) {
 ///     let chunks = Layout::default()
 ///         .direction(Direction::Vertical)
 ///         .constraints([Constraint::Min(1)].as_ref())
 ///         .split(f.size());
 ///
-///     let fuzzy_results = FuzzyList::<u32>::default()
+///     let fuzzy_results = FuzzyList::default()
 ///         .block(Block::default().borders(Borders::ALL).title("Options"))
 ///         .matched_char_style(Style::default().fg(Color::Cyan))
 ///         .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
