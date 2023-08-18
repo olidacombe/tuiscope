@@ -174,6 +174,7 @@ pub struct FuzzyListEntry<'a> {
 ///     f.render_stateful_widget(fuzzy_results, chunks[2], state);
 /// }
 /// ```
+#[derive(Default)]
 pub struct FuzzyFinder<'a> {
     /// The current filter string.
     filter: String,
@@ -184,13 +185,6 @@ pub struct FuzzyFinder<'a> {
 }
 
 impl<'a> FuzzyFinder<'a> {
-    pub fn new() -> Self {
-        Self {
-            filter: String::default(),
-            matches: IndexMap::default(),
-            state: ListState::default(),
-        }
-    }
     /// Clears the filter term.
     pub fn clear_filter(&mut self) -> &mut Self {
         self.filter = String::new();
@@ -265,7 +259,7 @@ impl<'a> FuzzyFinder<'a> {
     }
 
     /// Updates the set of options to search.
-    pub fn add_options<T: IntoIterator<Item = R>, R: 'a + AsRef<str>>(
+    pub fn add_options<T: 'a + IntoIterator<Item = &'a R>, R: 'a + AsRef<str>>(
         &mut self,
         options: T,
     ) -> &mut Self {
@@ -320,7 +314,7 @@ impl<'a> FuzzyFinder<'a> {
         // self.compute_matches(iter.filter(|(_, score)| score.is_none()));
 
         self.matches
-            .par_sorted_unstable_by(|_, ref v1, _, ref v2| v1.cmp(v2));
+            .par_sort_unstable_by(|_, ref v1, _, ref v2| v1.cmp(v2));
 
         // TODO only if some change
         self.reset_selection();
