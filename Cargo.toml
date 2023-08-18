@@ -26,11 +26,15 @@ indexmap = { version = "2.0.0", features = ["rayon"] }
 
 [dev-dependencies]
 anyhow = "1.0.72"
-crossterm = { version = "0.27.0" }
+crossterm = { version = "0.27.0", features = ["event-stream"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 fakeit = "1.1"
 rand = "0.8"
 tracing-subscriber = "0.3.17"
+tokio = { version = "1.32.0", features = ["time", "sync", "rt", "macros", "rt-multi-thread", "io-std", "io-util"] }
+tui-input = "0.8.0"
+eyre = "0.6.8"
+futures = "0.3.28"
 
 [dev-dependencies.cargo-husky]
 version = "1"
