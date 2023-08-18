@@ -4,21 +4,24 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use fakeit::beer;
-use std::{collections::HashMap, error::Error, io};
+use std::{error::Error, io};
 use tui::{prelude::*, widgets::*};
 use tuiscope::{FuzzyFinder, FuzzyList};
 
+#[derive(Default)]
 enum InputMode {
+    #[default]
     Normal,
     Editing,
 }
 
 /// App holds the state of the application
+#[derive(Default)]
 struct App<'a> {
     /// Current value of the input box
     input: String,
     /// Fuzzy Finder
-    pub fuzzy_finder: FuzzyFinder<'a, u32>,
+    pub fuzzy_finder: FuzzyFinder<'a>,
     /// Position of cursor in the editor area.
     cursor_position: usize,
     /// Current input mode
@@ -28,16 +31,6 @@ struct App<'a> {
 }
 
 impl<'a> App<'a> {
-    fn new(options: &'a HashMap<u32, String>) -> Self {
-        let fuzzy_finder = FuzzyFinder::new(options);
-        Self {
-            fuzzy_finder,
-            input: String::new(),
-            input_mode: InputMode::Normal,
-            messages: Vec::new(),
-            cursor_position: 0,
-        }
-    }
     fn move_cursor_left(&mut self) {
         let cursor_moved_left = self.cursor_position.saturating_sub(1);
         self.cursor_position = self.clamp_cursor(cursor_moved_left);
@@ -89,7 +82,7 @@ impl<'a> App<'a> {
 
     fn submit_message(&mut self) {
         if let Some(selection) = self.fuzzy_finder.selection() {
-            self.messages.push(selection.v.to_string());
+            self.messages.push(selection.value.to_string());
         }
         self.input.clear();
         self.fuzzy_finder.clear_filter();
@@ -101,9 +94,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Error's to stderr make a mess of the interface, use this only for inspecting tracing output.
     // tracing_subscriber::fmt::init();
 
-    let mut options = HashMap::<u32, String>::new();
-    for n in 1..100 {
-        options.insert(n, beer::name());
+    let mut options = Vec::<String>::new();
+    for _ in 1..100 {
+        options.push(beer::name());
     }
 
     // setup terminal
@@ -114,7 +107,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let app = App::new(&options);
+    let mut app = App::default();
+    app.fuzzy_finder.add_options(&options);
     let res = run_app(&mut terminal, app);
 
     // restore terminal
@@ -247,7 +241,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         }
     }
 
-    let fuzzy_results = FuzzyList::<u32>::default()
+    let fuzzy_results = FuzzyList::default()
         .block(Block::default().borders(Borders::ALL).title("Options"))
         .matched_char_style(Style::default().fg(Color::Cyan))
         .selection_highlight_style(Style::default().add_modifier(Modifier::BOLD));
