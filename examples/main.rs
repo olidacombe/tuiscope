@@ -45,7 +45,7 @@ impl<'a> App<'a> {
         self.input.insert(self.cursor_position, new_char);
 
         self.move_cursor_right();
-        self.fuzzy_finder.set_filter(self.input.to_string().into());
+        self.fuzzy_finder.set_filter(self.input.to_string());
     }
 
     fn delete_char(&mut self) {
@@ -68,7 +68,7 @@ impl<'a> App<'a> {
             self.input = before_char_to_delete.chain(after_char_to_delete).collect();
             self.move_cursor_left();
 
-            self.fuzzy_finder.set_filter(self.input.to_string().into());
+            self.fuzzy_finder.set_filter(self.input.to_string());
         }
     }
 

@@ -180,7 +180,7 @@ pub struct FuzzyFinder<'a> {
     /// The current filter string.
     filter: Cow<'a, str>,
     /// IndexMap of FuzzyScore.
-    matches: IndexMap<&'a str, Option<FuzzyScore>>,
+    matches: IndexMap<Cow<'a, str>, Option<FuzzyScore>>,
     /// State for the `FuzzyList` widget's selection.
     pub state: ListState,
 }
@@ -253,20 +253,20 @@ impl<'a> FuzzyFinder<'a> {
     }
 
     /// Updates the filter term.
-    pub fn set_filter(&mut self, filter: Cow<'a, str>) -> &mut Self {
-        self.filter = filter;
+    pub fn set_filter<T: Into<Cow<'a, str>>>(&mut self, filter: T) -> &mut Self {
+        self.filter = filter.into();
         self.update_matches(true);
         self
     }
 
     /// Updates the set of options to search.
-    pub fn add_options<T: 'a + IntoIterator<Item = &'a R>, R: 'a + AsRef<str>>(
+    pub fn add_options<T: 'a + IntoIterator<Item = R>, R: Into<Cow<'a, str>>>(
         &mut self,
         options: T,
     ) -> &mut Self {
         for option in options {
             // keep existing score if entry exists.
-            self.matches.entry(option.as_ref()).or_insert(None);
+            self.matches.entry(option.into()).or_insert(None);
         }
         self.update_matches(false);
         self
