@@ -6,6 +6,7 @@ use crossterm::{
 use fakeit::beer;
 use std::{error::Error, io};
 use tui::{prelude::*, widgets::*};
+use tui_input::{backend::crossterm::EventHandler, Input};
 use tuiscope::{FuzzyFinder, FuzzyList};
 
 #[derive(Default)]
@@ -19,11 +20,9 @@ enum InputMode {
 #[derive(Default)]
 struct App<'a> {
     /// Current value of the input box
-    input: String,
+    input: Input,
     /// Fuzzy Finder
     pub fuzzy_finder: FuzzyFinder<'a>,
-    /// Position of cursor in the editor area.
-    cursor_position: usize,
     /// Current input mode
     input_mode: InputMode,
     /// History of recorded messages
@@ -31,62 +30,16 @@ struct App<'a> {
 }
 
 impl<'a> App<'a> {
-    fn move_cursor_left(&mut self) {
-        let cursor_moved_left = self.cursor_position.saturating_sub(1);
-        self.cursor_position = self.clamp_cursor(cursor_moved_left);
-    }
-
-    fn move_cursor_right(&mut self) {
-        let cursor_moved_right = self.cursor_position.saturating_add(1);
-        self.cursor_position = self.clamp_cursor(cursor_moved_right);
-    }
-
-    fn enter_char(&mut self, new_char: char) {
-        self.input.insert(self.cursor_position, new_char);
-
-        self.move_cursor_right();
-        self.fuzzy_finder.set_filter(self.input.to_string());
-    }
-
-    fn delete_char(&mut self) {
-        let is_not_cursor_leftmost = self.cursor_position != 0;
-        if is_not_cursor_leftmost {
-            // Method "remove" is not used on the saved text for deleting the selected char.
-            // Reason: Using remove on String works on bytes instead of the chars.
-            // Using remove would require special care because of char boundaries.
-
-            let current_index = self.cursor_position;
-            let from_left_to_current_index = current_index - 1;
-
-            // Getting all characters before the selected character.
-            let before_char_to_delete = self.input.chars().take(from_left_to_current_index);
-            // Getting all characters after selected character.
-            let after_char_to_delete = self.input.chars().skip(current_index);
-
-            // Put all characters together except the selected one.
-            // By leaving the selected one out, it is forgotten and therefore deleted.
-            self.input = before_char_to_delete.chain(after_char_to_delete).collect();
-            self.move_cursor_left();
-
-            self.fuzzy_finder.set_filter(self.input.to_string());
-        }
-    }
-
-    fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
-        new_cursor_pos.clamp(0, self.input.len())
-    }
-
-    fn reset_cursor(&mut self) {
-        self.cursor_position = 0;
-    }
-
     fn submit_message(&mut self) {
         if let Some(selection) = self.fuzzy_finder.selection() {
             self.messages.push(selection.value.to_string());
         }
-        self.input.clear();
+        self.input.reset();
         self.fuzzy_finder.clear_filter();
-        self.reset_cursor();
+    }
+    pub fn handle_key(&mut self, key: &crossterm::event::Event) {
+        self.input.handle_event(key);
+        self.fuzzy_finder.set_filter(self.input.to_string());
     }
 }
 
@@ -144,28 +97,18 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 },
                 InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
                     KeyCode::Enter => app.submit_message(),
-                    KeyCode::Char(to_insert) => {
-                        app.enter_char(to_insert);
-                    }
-                    KeyCode::Backspace => {
-                        app.delete_char();
-                    }
                     KeyCode::Up => {
                         app.fuzzy_finder.select_prev();
                     }
                     KeyCode::Down => {
                         app.fuzzy_finder.select_next();
                     }
-                    KeyCode::Left => {
-                        app.move_cursor_left();
-                    }
-                    KeyCode::Right => {
-                        app.move_cursor_right();
-                    }
                     KeyCode::Esc => {
                         app.input_mode = InputMode::Normal;
                     }
-                    _ => {}
+                    _ => {
+                        app.handle_key(&crossterm::event::Event::Key(key));
+                    }
                 },
                 _ => {}
             }
@@ -216,30 +159,13 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let help_message = Paragraph::new(text);
     f.render_widget(help_message, chunks[0]);
 
-    let input = Paragraph::new(app.input.as_str())
+    let input = Paragraph::new(app.input.to_string())
         .style(match app.input_mode {
             InputMode::Normal => Style::default(),
             InputMode::Editing => Style::default().fg(Color::Yellow),
         })
         .block(Block::default().borders(Borders::ALL).title("Input"));
     f.render_widget(input, chunks[1]);
-    match app.input_mode {
-        InputMode::Normal =>
-            // Hide the cursor. `Frame` does this by default, so we don't need to do anything here
-            {}
-
-        InputMode::Editing => {
-            // Make the cursor visible and ask ratatui to put it at the specified coordinates after
-            // rendering
-            f.set_cursor(
-                // Draw the cursor at the current position in the input field.
-                // This position is can be controlled via the left and right arrow key
-                chunks[1].x + app.cursor_position as u16 + 1,
-                // Move one line down, from the border to the input line
-                chunks[1].y + 1,
-            )
-        }
-    }
 
     let fuzzy_results = FuzzyList::default()
         .block(Block::default().borders(Borders::ALL).title("Options"))
