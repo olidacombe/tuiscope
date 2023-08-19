@@ -329,47 +329,21 @@ impl<'a> FuzzyFinder<'a> {
         self.matches.entry(option.into()).or_insert(None);
     }
 
-    // fn compute_matches<I: ParallelIterator<Item = (&str, &'a mut Option<FuzzyScore>)>>(
-    //     &mut self,
-    //     iterator: I,
-    // ) {
-    //     let matcher = SkimMatcherV2::default();
-    //
-    //     iterator.for_each(|(value, score)| {
-    //         *score = matcher
-    //             .fuzzy_indices(value, &self.filter)
-    //             .map(|(score, indices)| FuzzyScore { score, indices })
-    //     });
-    // }
-
     fn update_matches(&mut self, new_filter_term: bool) {
         let matcher = SkimMatcherV2::default();
 
-        let iter = self.matches.par_iter_mut();
-        if !new_filter_term {
-            // TODO None matches were inserted last, so we should be able to iterate
-            // from the end and stop early.  But I couldn't quite find the right
-            // early-stopping option for an IndexedParallesIterator
-            // iter = iter.rev().take_any_while... race behavior is not ideal
-
-            // TODO just filter here, drop the else {} and run self.compute_matches outside
-            // condition
-            iter.filter(|(_, score)| score.is_none())
-                .for_each(|(value, score)| {
-                    *score = matcher
-                        .fuzzy_indices(value, &self.filter)
-                        .map(|(score, indices)| FuzzyScore { score, indices })
-                });
-
-            // self.compute_matches(iter.filter(|(_, score)| score.is_none()));
-        } else {
-            iter.for_each(|(value, score)| {
+        // TODO None matches were inserted last, so we should be able to iterate
+        // from the end and stop early.  But I couldn't quite find the right
+        // early-stopping option for an IndexedParallesIterator
+        // iter = iter.rev().take_any_while... race behavior is not ideal
+        self.matches
+            .par_iter_mut()
+            .filter(|(_, score)| new_filter_term || score.is_none())
+            .for_each(|(value, score)| {
                 *score = matcher
                     .fuzzy_indices(value, &self.filter)
                     .map(|(score, indices)| FuzzyScore { score, indices })
             });
-        }
-        // self.compute_matches(iter.filter(|(_, score)| score.is_none()));
 
         self.matches
             .par_sort_unstable_by(|_, ref v1, _, ref v2| match v1 {
