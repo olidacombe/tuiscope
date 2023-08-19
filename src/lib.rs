@@ -237,18 +237,15 @@ impl<'a> FuzzyFinder<'a> {
     /// Get the current selected entry.
     pub fn selection(&self) -> Option<FuzzyListEntry> {
         self.state.selected().and_then(|i| {
-            self.matches
-                .get_index(i)
-                .map(|(value, score)| {
-                    score
-                        .as_ref()
-                        .map(|FuzzyScore { score, indices }| FuzzyListEntry {
-                            value,
-                            indices: indices.clone(),
-                            score: *score,
-                        })
-                })
-                .flatten()
+            self.matches.get_index(i).and_then(|(value, score)| {
+                score
+                    .as_ref()
+                    .map(|FuzzyScore { score, indices }| FuzzyListEntry {
+                        value,
+                        indices: indices.clone(),
+                        score: *score,
+                    })
+            })
         })
     }
 
@@ -369,8 +366,7 @@ impl<'a> StatefulWidget for FuzzyList<'a> {
             .filter_map(|(value, score)| {
                 score
                     .as_ref()
-                    .map(|score| self.styled_line(value, &score.indices).ok())
-                    .flatten()
+                    .and_then(|score| self.styled_line(value, &score.indices).ok())
             })
             .take(area.height as usize + state.state.selected().unwrap_or(0))
             .map(ListItem::new)
