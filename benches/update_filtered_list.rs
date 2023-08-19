@@ -8,7 +8,7 @@ fn set_filter(c: &mut Criterion) {
         options.push(beer::name());
     }
     let mut fuzzy_finder = FuzzyFinder::default();
-    fuzzy_finder.add_options(&options);
+    fuzzy_finder.push_options(&options);
     c.bench_function("score 1,000,000", |b| {
         b.iter(|| {
             fuzzy_finder.set_filter(black_box("b".to_string()));

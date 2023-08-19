@@ -108,7 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // create app and run it
     let mut app = App::default();
-    app.fuzzy_finder.add_options(&options);
+    app.fuzzy_finder.push_options(&options);
     let res = run_app(&mut terminal, app);
 
     // restore terminal

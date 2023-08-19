@@ -146,7 +146,7 @@ impl Eq for FuzzyScore {}
 #[derive(Clone)]
 pub struct FuzzyListEntry<'a> {
     /// value of entry
-    pub value: &'a str,
+    pub value: &'a str, // TODO not a &str?
     /// fuzzy match score
     pub score: i64,
     /// fuzzy match indices (positions in `value`)
@@ -259,17 +259,74 @@ impl<'a> FuzzyFinder<'a> {
         self
     }
 
-    /// Updates the set of options to search.
-    pub fn add_options<T: 'a + IntoIterator<Item = R>, R: Into<Cow<'a, str>>>(
+    /// Updates the set of options to search by adding from an iterator.
+    pub fn push_options<T: 'a + IntoIterator<Item = R>, R: Into<Cow<'a, str>>>(
         &mut self,
         options: T,
     ) -> &mut Self {
         for option in options {
-            // keep existing score if entry exists.
-            self.matches.entry(option.into()).or_insert(None);
+            self._push_option(option);
         }
         self.update_matches(false);
         self
+    }
+
+    /// Builder method which sets search options.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let ff = FuzzyFinder::default().with_options(["one", "two", "three"]);
+    /// ```
+    pub fn with_options<T: 'a + IntoIterator<Item = R>, R: Into<Cow<'a, str>>>(
+        mut self,
+        options: T,
+    ) -> Self {
+        self.set_options(options);
+        self
+    }
+
+    /// Sets search options.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.set_options(["one", "two", "three"]);
+    /// ```
+    pub fn set_options<T: 'a + IntoIterator<Item = R>, R: Into<Cow<'a, str>>>(
+        &mut self,
+        options: T,
+    ) -> &mut Self {
+        // TODO be more efficient, keep any existing scores for overlapping keys.
+        self.matches.clear();
+        self.push_options(options);
+        self
+    }
+
+    /// Add an option to search.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.push_option("hello");
+    /// ```
+    pub fn push_option<R: Into<Cow<'a, str>>>(&mut self, option: R) {
+        self._push_option(option);
+        self.update_matches(false);
+    }
+
+    /// Adds an option to search without updating.
+    fn _push_option<R: Into<Cow<'a, str>>>(&mut self, option: R) {
+        // keep existing score if entry exists.
+        self.matches.entry(option.into()).or_insert(None);
     }
 
     // fn compute_matches<I: ParallelIterator<Item = (&str, &'a mut Option<FuzzyScore>)>>(
