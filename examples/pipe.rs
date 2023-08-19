@@ -43,7 +43,24 @@ struct App<'a> {
 impl<'a> App<'a> {
     pub fn push_option(&'a mut self, option: String) {
         self.options.push(option);
-        self.fuzzy_finder.add_options(&self.options);
+        self.fuzzy_finder.add_options(&*self.options);
+    }
+    pub fn selection(&self) -> Result<String> {
+        Ok(self
+            .fuzzy_finder
+            .selection()
+            .map(|s| s.value.to_string())
+            .unwrap_or_default())
+    }
+    pub fn select_next(&mut self) {
+        self.fuzzy_finder.select_next();
+    }
+    pub fn select_prev(&mut self) {
+        self.fuzzy_finder.select_prev();
+    }
+    pub fn handle_key(&mut self, key: &crossterm::event::Event) {
+        self.input.handle_event(key);
+        self.fuzzy_finder.set_filter(self.input.to_string());
     }
 }
 
@@ -123,7 +140,7 @@ async fn main() -> Result<()> {
 
 async fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> Result<String> {
     let mut app = App::default();
-    // let mut options = Vec::<String>::new();
+    // let mut options = Vec::<String>::new(); // immutable frozen from `elsa` may work
 
     let (tx, mut rx) = channel::<Event>(20);
     tick_task(tx.clone()).await?;
@@ -147,22 +164,17 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> Result<String> {
                     if key.kind == KeyEventKind::Press {
                         match key.code {
                             KeyCode::Enter => {
-                                return Ok(app
-                                    .fuzzy_finder
-                                    .selection()
-                                    .map(|s| s.value.to_string())
-                                    .unwrap_or_default());
+                                return app.selection();
                             }
                             KeyCode::Up => {
-                                app.fuzzy_finder.select_prev();
+                                app.select_prev();
                             }
                             KeyCode::Down => {
-                                app.fuzzy_finder.select_next();
+                                app.select_next();
                             }
                             KeyCode::Esc => return Ok(String::default()),
                             _ => {
-                                app.input.handle_event(&crossterm::event::Event::Key(key));
-                                app.fuzzy_finder.set_filter(app.input.to_string());
+                                app.handle_key(&crossterm::event::Event::Key(key));
                             }
                         }
                     }

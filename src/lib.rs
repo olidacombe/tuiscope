@@ -12,6 +12,7 @@ use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use indexmap::IndexMap;
 use rayon::prelude::*;
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     ops::{Bound, RangeBounds},
     slice::SliceIndex,
@@ -177,7 +178,7 @@ pub struct FuzzyListEntry<'a> {
 #[derive(Default)]
 pub struct FuzzyFinder<'a> {
     /// The current filter string.
-    filter: String,
+    filter: Cow<'a, str>,
     /// IndexMap of FuzzyScore.
     matches: IndexMap<&'a str, Option<FuzzyScore>>,
     /// State for the `FuzzyList` widget's selection.
@@ -187,7 +188,7 @@ pub struct FuzzyFinder<'a> {
 impl<'a> FuzzyFinder<'a> {
     /// Clears the filter term.
     pub fn clear_filter(&mut self) -> &mut Self {
-        self.filter = String::new();
+        self.filter = Cow::default();
         self.update_matches(true);
         self
     }
@@ -252,7 +253,7 @@ impl<'a> FuzzyFinder<'a> {
     }
 
     /// Updates the filter term.
-    pub fn set_filter(&mut self, filter: String) -> &mut Self {
+    pub fn set_filter(&mut self, filter: Cow<'a, str>) -> &mut Self {
         self.filter = filter;
         self.update_matches(true);
         self
