@@ -23,7 +23,7 @@ fmt:
 # check code
 check:
     cargo check
-    cargo clippy
+    cargo clippy --all-targets --all-features
 
 # build project
 build:
