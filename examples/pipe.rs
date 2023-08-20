@@ -52,6 +52,7 @@ impl<'a> App<'a> {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 enum Event {
     // When `stdio` is exhausted
     EOF,
@@ -65,7 +66,7 @@ async fn tick_task(tx: Sender<Event>) -> Result<JoinHandle<()>> {
     Ok(tokio::spawn(async move {
         loop {
             interval.tick().await;
-            if let Err(_) = tx.send(Event::Tick).await {
+            if (tx.send(Event::Tick).await).is_err() {
                 break;
             }
         }
@@ -77,7 +78,7 @@ async fn crossterm_event_task(tx: Sender<Event>) -> Result<JoinHandle<()>> {
     Ok(tokio::spawn(async move {
         loop {
             if let Some(Ok(Key(event))) = events.next().await {
-                if let Err(_) = tx.send(Event::Key(event)).await {
+                if (tx.send(Event::Key(event)).await).is_err() {
                     continue;
                 }
             }
