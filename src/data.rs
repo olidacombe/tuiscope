@@ -251,6 +251,8 @@ impl<'a> FuzzyFinder<'a> {
         options: T,
     ) -> &mut Self {
         // TODO be more efficient, keep any existing scores for overlapping keys.
+        // Maybe leverage `remove_options` when an efficient  version of that has
+        // been made.
         self.matches.clear();
         self.push_options(options);
         self
