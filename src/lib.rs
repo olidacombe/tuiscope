@@ -1,13 +1,10 @@
-//! # TuiScope
+//! # `TuiScope`
 //!
 //! Inspired by [telescope](https://github.com/nvim-telescope/telescope.nvim).
 //!
 //! A TUI fuzzy finder for rust apps. For example usage, see [examples](https://github.com/olidacombe/tuiscope/tree/main/examples).
-//!
-//! # Performance
-//!
-//! If you're dealing with large amounts of data (say 1,000,000 strings), performance is poor with
-//! debug builds.  Release builds are still snappy.
+#![deny(clippy::pedantic)]
+#![allow(clippy::must_use_candidate, clippy::return_self_not_must_use)]
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use indexmap::IndexMap;
 use rayon::prelude::*;
@@ -195,10 +192,10 @@ impl<'a> FuzzyFinder<'a> {
 
     /// Resets the selected line from filtered options to the 0th.
     fn reset_selection(&mut self) -> &mut Self {
-        if !self.matches.is_empty() {
-            self.state.select(Some(0));
-        } else {
+        if self.matches.is_empty() {
             self.state.select(None);
+        } else {
+            self.state.select(Some(0));
         }
         self
     }
@@ -339,17 +336,16 @@ impl<'a> FuzzyFinder<'a> {
             .for_each(|(value, score)| {
                 *score = matcher
                     .fuzzy_indices(value, &self.filter)
-                    .map(|(score, indices)| FuzzyScore { score, indices })
+                    .map(|(score, indices)| FuzzyScore { score, indices });
             });
 
-        self.matches
-            .par_sort_unstable_by(|_, ref v1, _, ref v2| match v1 {
-                Some(v1) => match v2 {
-                    Some(v2) => v1.cmp(v2),
-                    None => Ordering::Less,
-                },
-                None => Ordering::Greater,
-            });
+        self.matches.par_sort_unstable_by(|_, v1, _, v2| match v1 {
+            Some(v1) => match v2 {
+                Some(v2) => v1.cmp(v2),
+                None => Ordering::Less,
+            },
+            None => Ordering::Greater,
+        });
 
         // TODO only if some change
         self.reset_selection();
