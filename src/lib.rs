@@ -6,20 +6,16 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::must_use_candidate, clippy::return_self_not_must_use)]
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
+use highlight::{sections_from_stringdices, MatchHighlightError, Style as HighlightStyle};
 use indexmap::IndexMap;
 use rayon::prelude::*;
-use std::{
-    borrow::Cow,
-    cmp::Ordering,
-    ops::{Bound, RangeBounds},
-    slice::SliceIndex,
-};
-use thiserror::Error;
-use tracing::error;
+use std::{borrow::Cow, cmp::Ordering};
 use tui::{
     prelude::*,
     widgets::{Block, List, ListItem, ListState, StatefulWidget},
 };
+
+mod highlight;
 
 /// Ephemeral list widget for fuzzy matched items.
 /// Highlights selected line and matched chars.
@@ -99,7 +95,7 @@ impl<'a> FuzzyList<'a> {
         indices: &'a [usize],
     ) -> Result<Line, MatchHighlightError> {
         Ok(Line::from(
-            highlight_sections_from_stringdices(value, indices)?
+            sections_from_stringdices(value, indices)?
                 .iter()
                 .map(|section| match section {
                     HighlightStyle::None(sub) => Span::styled(*sub, self.unmatched_char_style),
@@ -383,6 +379,41 @@ impl<'a> FuzzyFinder<'a> {
         self.matches.entry(option.into()).or_insert(None);
     }
 
+    /// Removes an option.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.push_options(["hello", "friend"]);
+    /// ff.remove_option("hello");
+    /// ```
+    pub fn remove_option<R: AsRef<str>>(&mut self, key: R) {
+        self.matches.shift_remove(key.as_ref());
+    }
+
+    /// Removes multiple options.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.push_options(["hello", "my", "old", "friend"]);
+    /// ff.remove_options(["my", "old"]);
+    /// ```
+    pub fn remove_options<T: 'a + IntoIterator<Item = R>, R: AsRef<str>>(&mut self, keys: T) {
+        // TODO something smarter, this will O(n) shift all entries in `self.matches`
+        // for each key.  Will in certain cases be better to just `self.matches.remove`
+        // followed by a sort.
+        for key in keys {
+            self.remove_option(key);
+        }
+    }
+
     /// Computes new scores for all options if `new_filter_term` is true.
     /// Otherwise competes scores for all options who haven't had a calculation
     /// yet against the current filter.
@@ -440,171 +471,27 @@ impl<'a> StatefulWidget for FuzzyList<'a> {
     }
 }
 
-#[derive(Debug, PartialEq)]
-enum HighlightStyle<'a> {
-    None(&'a str),
-    Matched(&'a str),
-}
-
-#[derive(Error, Debug)]
-pub enum MatchHighlightError {
-    #[error("substring {start:?}:{end:?} not found in {string}")]
-    SubstringNotFound {
-        start: Bound<usize>,
-        end: Bound<usize>,
-        string: String,
-    },
-}
-
-fn get_substring<R: RangeBounds<usize> + SliceIndex<str> + Clone>(
-    string: &str,
-    range: R,
-) -> Result<&<R as SliceIndex<str>>::Output, MatchHighlightError> {
-    string.get(range.clone()).ok_or_else(|| {
-        let start = range.start_bound().cloned();
-        let end = range.end_bound().cloned();
-        error! {"Invalid range {:?}:{:?} in `{}`", start, end, string};
-        MatchHighlightError::SubstringNotFound {
-            start,
-            end,
-            string: string.into(),
-        }
-    })
-}
-
-fn highlight_sections_from_stringdices<'a>(
-    string: &'a str,
-    indices: &'a [usize],
-) -> Result<Vec<HighlightStyle<'a>>, MatchHighlightError> {
-    let mut ret = Vec::new();
-    let mut indices = indices.iter().peekable();
-    let mut i: usize = 0;
-    while let Some(m) = indices.next() {
-        if *m > 0 {
-            let sub = get_substring(string, i..*m)?;
-            ret.push(HighlightStyle::None(sub));
-        }
-        i = *m;
-        let mut j = *m + 1;
-        while let Some(m) = indices.peek() {
-            if *m > &j {
-                break;
-            }
-            indices.next();
-            j += 1;
-        }
-        let sub = get_substring(string, i..j)?;
-        ret.push(HighlightStyle::Matched(sub));
-        i = j;
-    }
-    if i < string.len() {
-        let sub = get_substring(string, i..)?;
-        ret.push(HighlightStyle::None(sub));
-    }
-    Ok(ret)
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use anyhow::Result;
 
     #[test]
-    fn no_highlight() -> Result<()> {
-        assert_eq!(
-            highlight_sections_from_stringdices("abc", &Vec::new())?,
-            vec![HighlightStyle::None("abc")]
-        );
-        Ok(())
+    fn remove_option() {
+        let mut ff = FuzzyFinder::default();
+        ff.push_options(["hello", "friend"]);
+        assert!(ff.matches.contains_key("hello"));
+        ff.remove_option("hello");
+        assert!(!ff.matches.contains_key("hello"));
     }
 
     #[test]
-    fn highlight_one_char_at_start() -> Result<()> {
-        assert_eq!(
-            highlight_sections_from_stringdices("abc", &[0])?,
-            vec![HighlightStyle::Matched("a"), HighlightStyle::None("bc")]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn highlight_one_char_at_end() -> Result<()> {
-        assert_eq!(
-            highlight_sections_from_stringdices("abc", &[2])?,
-            vec![HighlightStyle::None("ab"), HighlightStyle::Matched("c")]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn highlight_three_char_at_start() -> Result<()> {
-        assert_eq!(
-            highlight_sections_from_stringdices("abcde", &[0, 1, 2])?,
-            vec![HighlightStyle::Matched("abc"), HighlightStyle::None("de")]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn highlight_three_char_at_end() -> Result<()> {
-        assert_eq!(
-            highlight_sections_from_stringdices("abcde", &[2, 3, 4])?,
-            vec![HighlightStyle::None("ab"), HighlightStyle::Matched("cde")]
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn highlight_fun_mixture_one() -> Result<()> {
-        assert_eq!(
-            highlight_sections_from_stringdices("abcdefghijk", &[1, 2, 5, 6, 7, 9])?,
-            vec![
-                HighlightStyle::None("a"),
-                HighlightStyle::Matched("bc"),
-                HighlightStyle::None("de"),
-                HighlightStyle::Matched("fgh"),
-                HighlightStyle::None("i"),
-                HighlightStyle::Matched("j"),
-                HighlightStyle::None("k")
-            ]
-        );
-        Ok(())
-    }
-
-    // These 2 bugs occurred when starting a search with 's'
-    // Note the first s in both cases is after a special character
-    #[ignore]
-    #[test]
-    fn found_bug_1() -> Result<()> {
-        // This used to error
-        highlight_sections_from_stringdices("Chimay Grande Réserve", &[0, 16])?;
-        Ok(())
-    }
-
-    // It looks like unicode is the cause?
-    #[ignore]
-    #[test]
-    fn found_bug_2() -> Result<()> {
-        // This used to error
-        highlight_sections_from_stringdices("Bell’s Expedition", &[0, 5])?;
-        Ok(())
-    }
-
-    #[test]
-    fn periods_are_ok() -> Result<()> {
-        highlight_sections_from_stringdices("ABC.DEF.GHI", &[0, 4])?;
-        Ok(())
-    }
-
-    #[test]
-    fn normal_apostrophes_are_ok() -> Result<()> {
-        highlight_sections_from_stringdices("ABC'DEF.GHI", &[0, 4])?;
-        Ok(())
-    }
-
-    #[test]
-    fn normal_backticks_are_ok() -> Result<()> {
-        highlight_sections_from_stringdices("ABC`DEF.GHI", &[0, 4])?;
-        Ok(())
+    fn remove_options() {
+        let mut ff = FuzzyFinder::default();
+        ff.push_options(["hello", "my", "old", "friend"]);
+        ff.remove_options(["my", "old"]);
+        assert!(ff.matches.contains_key("hello"));
+        assert!(ff.matches.contains_key("friend"));
+        assert!(!ff.matches.contains_key("my"));
+        assert!(!ff.matches.contains_key("old"));
     }
 }
