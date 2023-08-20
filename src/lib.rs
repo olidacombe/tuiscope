@@ -184,6 +184,16 @@ pub struct FuzzyFinder<'a> {
 
 impl<'a> FuzzyFinder<'a> {
     /// Clears the filter term.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.set_filter("foo");
+    /// ff.clear_filter();
+    /// ```
     pub fn clear_filter(&mut self) -> &mut Self {
         self.filter = Cow::default();
         self.update_matches(true);
@@ -201,6 +211,15 @@ impl<'a> FuzzyFinder<'a> {
     }
 
     /// Select the next filtered entry.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.select_next();
+    /// ```
     pub fn select_next(&mut self) -> &mut Self {
         if let Some(current) = self.state.selected() {
             self.select(current + 1);
@@ -211,6 +230,17 @@ impl<'a> FuzzyFinder<'a> {
     }
 
     /// Select the previous filtered entry.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.select_next();
+    /// ff.select_next();
+    /// ff.select_prev();
+    /// ```
     pub fn select_prev(&mut self) -> &mut Self {
         if let Some(current) = self.state.selected() {
             if current > 0 {
@@ -232,6 +262,18 @@ impl<'a> FuzzyFinder<'a> {
     }
 
     /// Get the current selected entry.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.select_next();
+    /// ff.select_next();
+    /// ff.select_prev();
+    /// let answer = ff.selection();
+    /// ```
     pub fn selection(&self) -> Option<FuzzyListEntry> {
         self.state.selected().and_then(|i| {
             self.matches.get_index(i).and_then(|(value, score)| {
@@ -247,6 +289,15 @@ impl<'a> FuzzyFinder<'a> {
     }
 
     /// Updates the filter term.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.set_filter("foo");
+    /// ```
     pub fn set_filter<T: Into<Cow<'a, str>>>(&mut self, filter: T) -> &mut Self {
         self.filter = filter.into();
         self.update_matches(true);
@@ -254,6 +305,15 @@ impl<'a> FuzzyFinder<'a> {
     }
 
     /// Updates the set of options to search by adding from an iterator.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tuiscope::FuzzyFinder;
+    ///
+    /// let mut ff = FuzzyFinder::default();
+    /// ff.push_options(["abc", "bcd", "cde"]);
+    /// ```
     pub fn push_options<T: 'a + IntoIterator<Item = R>, R: Into<Cow<'a, str>>>(
         &mut self,
         options: T,
@@ -323,6 +383,9 @@ impl<'a> FuzzyFinder<'a> {
         self.matches.entry(option.into()).or_insert(None);
     }
 
+    /// Computes new scores for all options if `new_filter_term` is true.
+    /// Otherwise competes scores for all options who haven't had a calculation
+    /// yet against the current filter.
     fn update_matches(&mut self, new_filter_term: bool) {
         let matcher = SkimMatcherV2::default();
 
