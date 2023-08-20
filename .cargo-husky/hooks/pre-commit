@@ -7,6 +7,6 @@ echo '+cargo fmt'
 cargo fmt
 echo "$FILES" | xargs git add
 
-echo "+cargo readme > README.md"
-cargo readme > README.md
+echo "+cargo rdme --force"
+cargo rdme --force
 git add README.md
