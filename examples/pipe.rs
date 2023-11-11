@@ -171,7 +171,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>) -> Result<String> {
     }
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+fn ui(f: &mut Frame<'_>, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(1)].as_ref())
