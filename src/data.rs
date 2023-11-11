@@ -53,7 +53,7 @@ pub struct FuzzyListEntry<'a> {
 /// use tui::widgets::*;
 /// use tuiscope::{FuzzyFinder, FuzzyList};
 ///
-/// fn ui<B: Backend>(f: &mut Frame<B>, state: &mut FuzzyFinder) {
+/// fn ui(f: &mut Frame<'_>, state: &mut FuzzyFinder) {
 ///     let chunks = Layout::default()
 ///         .direction(Direction::Vertical)
 ///         .constraints([Constraint::Min(1)].as_ref())
